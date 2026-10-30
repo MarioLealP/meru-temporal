@@ -1,0 +1,39 @@
+# Temporal's Postgres: one CNPG cluster, two databases.
+# CNPG writes the app user's credentials to the Secret temporal-db-app; the Temporal chart reads its password there.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: temporal-db
+spec:
+  instances: 1
+  # Postgres 16: what Temporal's own docker-compose runs.
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.15-202610260820-minimal-trixie@sha256:fc189febbe8c683dcf7399b93d25af3ad7a4d74c061875db300c41f0ad85f77a
+  inheritedMetadata:
+    labels:
+      app.kubernetes.io/name: temporal-db
+      app.kubernetes.io/part-of: meru
+      meru.clockmost.com/owner: platform
+  bootstrap:
+    initdb:
+      database: temporal
+      owner: temporal
+  storage:
+    storageClass: local
+    size: 2Gi
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  postgresql:
+    parameters:
+      max_connections: "100" # Temporal: 4 services x 2 stores x maxConns 10, plus the schema job
+      shared_buffers: 64MB
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: temporal-visibility
+spec:
+  name: temporal_visibility
+  owner: temporal
+  cluster:
+    name: temporal-db
